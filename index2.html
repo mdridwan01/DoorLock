@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DARAZ-DIGIBOX SELF COLLECTION POINT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{
+      margin-right: 20px !important;
+    }
+    /* Minimal helper animations */
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-pop { animation: pop .22s ease-out; }
+    @keyframes pop { from { transform: scale(.96); opacity:.0 } to { transform: scale(1); opacity:1 } }
+    .animate-scale { animation: scaleIn .28s ease-out; }
+    @keyframes scaleIn { from { transform: scale(.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  </style>
+</head>
+<body class="bg-violet-200 min-h-screen flex flex-col items-center p-6">
+
+  <!-- Header -->
+  <h1 class="text-3xl md:text-3xl sm:text-xl font-bold text-orange-500 mb-6 text-center ">
+    DARAZ-DIGIBOX <br> <span class="md:text-2xl text-2xl sm:text-lg">SELF COLLECTION POINT</span>
+  </h1>
+
+  <!-- Barcode Input -->
+  <div class="w-full max-w-md mb-6">
+    <input type="text" id="barcodeInput"
+      class="w-full p-3 rounded-lg border-0 text-lg caret-transparent focus:outline-none"
+      placeholder="Scan Here" autofocus>
+  </div>
+
+  <!-- Table + Watermark -->
+  <div class="w-full max-w-3xl relative">
+    <div class="w-full max-h-[460px] overflow-y-auto rounded-lg" id="tbodyWrapper">
+      <table class="w-full border border-gray-300 rounded-lg shadow-lg hidden" id="parcelTable">
+        <thead class="bg-orange-500 text-white">
+          <tr>
+            <th class="p-3 text-left">Parcel</th>
+            <th class="p-3 text-left">OTP</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody" class="bg-white font-bold divide-y divide-gray-200"></tbody>
+      </table>
+    </div>
+
+    <div id="watermark" class="w-full max-w-3xl bg-white absolute inset-0 flex items-center justify-center text-center text-gray-500 font-semibold text-3xl py-56 rounded">
+      Please scan your barcode
+    </div>
+  </div>
+
+  <!-- Bottom Buttons -->
+  <div id="bottomButtons" class="w-full max-w-3xl flex justify-between mt-6">
+    <button id="confirmAllBtn"
+      class="bg-blue-500 text-white px-8 py-3 mx-auto rounded-lg shadow hover:bg-blue-600 hidden"
+      onclick="confirmSubmit()">Continue</button>
+  </div>
+
+  <!-- OTP Modal -->
+  <div id="otpModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-40">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-[380px] text-center animate-scale relative">
+      <!-- Close button at top-middle (fixed) -->
+      <button id="closeBtn" class="absolute top-2 left-1/2 -translate-x-1/2 bg-orange-500 text-white p-2 rounded-full focus:outline-none" aria-label="Close OTP">
+        <!-- Modern close icon (X icon) -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+
+      <h2 class="text-xl font-semibold mb-1 text-gray-700">Enter 6 Digit Daraz OTP</h2>
+      <p class="text-sm text-gray-500 mb-3">This Parcel: <span id="otpParcelLabel" class="font-mono text-gray-700"></span></p>
+
+      <div class="relative">
+        <input type="text" id="otpInput"
+          class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-center tracking-widest text-lg"
+          placeholder="Enter 6 Digit Daraz OTP"
+          inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code">
+      </div>
+
+      <p id="otpMessage" class="text-green-500 text-sm mt-2 min-h-5"></p>
+
+      <div class="grid grid-cols-3 gap-3 mt-4 select-none"></div>
+
+      <div class="flex justify-center gap-3 mt-5">
+        <button class="bg-orange-500 text-white px-6 py-2 rounded-lg shadow hover:bg-orange-600"
+          onclick="submitOtp()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SINGLE Status Modal -->
+  <div id="statusModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[60]">
+    <div class="w-[92%] max-w-md bg-white rounded-2xl shadow-2xl p-6 animate-pop text-center">
+      <div id="statusIconWrap" class="mx-auto mb-4 flex items-center justify-center w-20 h-20 rounded-full border-4"></div>
+      <h3 id="statusTitle" class="text-xl font-semibold text-gray-800">Processing...</h3>
+      <p id="statusMessage" class="text-sm text-gray-600 mt-1">Exit door Open</p>
+
+      <!-- countdown area (shown on success) -->
+      <div id="statusFooter" class="mt-5 hidden">
+        <div class="text-base font-semibold">Thank you for using DIGIBOX</div>
+        <div class="text-sm text-gray-600 mt-1">Door Closing time: <span id="doorCountdown" class="font-bold">60s</span></div>
+        <div class="mt-4 h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
+          <div id="statusProgress" class="h-full w-0 bg-blue-500"></div>
+        </div>
+      </div>
+
+      <div class="mt-6">
+        <!-- Optional OK button:
+        <button id="statusOkBtn" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow">Close</button>
+        -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Rider Verify + Confirm Modal -->
+  <div id="riderConfirmModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[58]">
+    <div class="w-[92%] max-w-md bg-white rounded-2xl shadow-2xl p-6 animate-pop text-center relative">
+      <div id="riderIconWrap" class="mx-auto mb-3 flex items-center justify-center w-20 h-20 rounded-full border-4 border-blue-200 bg-blue-50">
+        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full spin"></div>
+      </div>
+      <h3 id="riderHeader" class="text-2xl font-bold text-gray-800">Verifying Rider…</h3>
+      <p id="riderSub" class="text-sm text-gray-600 mt-1">Please wait</p>
+
+      <div id="riderQuestion" class="mt-5 hidden">
+        <p class="text-base font-semibold text-gray-800">Do you want to open the exit door?</p>
+        <div class="flex justify-center gap-3 mt-4">
+          <button id="riderNoBtn" class="px-5 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800">No</button>
+          <button id="riderYesBtn" class="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white">Yes</button>
+        </div>
+      </div>
+
+      <!-- FAIL auto-close progress -->
+      <div id="riderFailFooter" class="hidden">
+        <div class="absolute left-0 right-0 bottom-0">
+          <div class="h-1.5 rounded-b-2xl bg-red-500/20 overflow-hidden">
+            <div id="riderFailProgress" class="h-full w-0 bg-red-500"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receipt Choice Modal -->
+  <div id="receiptChoiceModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[55]">
+    <div class="w-[92%] max-w-md bg-white rounded-2xl shadow-2xl p-6 animate-pop text-center">
+      <div class="mx-auto mb-1 flex items-center justify-center w-20 h-20 rounded-full border-4 border-green-200 bg-green-50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"></path></svg>
+      </div>
+      <h2 class="text-xl font-semibold text-green-800 mb-4">Your All Parcels Verified</h2>
+      <h3 class="text-xl font-semibold text-gray-800">Will you take a receipt?</h3>
+      <p class="text-sm text-gray-600 mt-1">You can print your collection summary.</p>
+      <div class="flex justify-center gap-3 mt-5">
+        <button id="receiptNoBtn" class="px-5 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800">No</button>
+        <button id="receiptYesBtn" class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">Print</button>
+      </div>
+      <div id="receiptPrintMsg" class="mt-4 text-sm text-gray-600 hidden">Printing receipt… <span id="receiptSecs" class="font-semibold">3</span>s</div>
+    </div>
+  </div>
+
+  <!-- WRONG PARCEL MODAL -->
+  <div id="wrongParcelModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[65]">
+    <div class="w-[95%] max-w-2xl bg-white rounded-2xl shadow-2xl p-6 animate-pop">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-12 h-12 rounded-full bg-red-50 border-4 border-red-200 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3 1.4 1.4Z"/></svg>
+        </div>
+        <div>
+          <h3 id="wrongParcelHeader" class="text-xl font-bold text-red-700">WRONG_PARCEL</h3>
+          <p class="text-sm text-gray-600">Please return this Product:</p>
+        </div>
+      </div>
+
+      <div class="overflow-hidden rounded-xl border border-red-200">
+        <table class="w-full">
+          <thead class="bg-red-50 text-red-800">
+            <tr class="text-left">
+              <th class="px-4 py-2 text-sm font-semibold">Parcel No</th>
+              <th class="px-4 py-2 text-sm font-semibold">Box No</th>
+              <th class="px-4 py-2 text-sm font-semibold">Shelf</th>
+            </tr>
+          </thead>
+          <tbody id="wrongParcelBody" class="divide-y divide-red-100"></tbody>
+        </table>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-5">
+        <button class="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600" onclick="closeWrongParcelModal()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal (z-index raised) -->
+  <div id="deleteConfirmationModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-[66]">
+    <div class="w-[92%] max-w-md bg-white rounded-2xl shadow-2xl p-6 animate-pop text-center">
+      <div class="mb-4 mx-auto flex items-center justify-center w-16 h-16 bg-red-50 rounded-full border-4 border-red-200">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 7h12v2H6V7Zm2 3h8v9a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-9Zm3-6h2a2 2 0 0 1 2 2v1H9V6a2 2 0 0 1 2-2Z"/>
+        </svg>
+      </div>
+      <h3 class="text-xl font-semibold text-gray-700 mb-4">Are You Sure This Item Deleted?</h3>
+      <div class="flex justify-center gap-3 mt-4">
+        <button id="cancelDeleteBtn" class="px-5 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800">Cancel</button>
+        <button id="confirmDeleteBtn" class="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white">Yes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print-only -->
+  <div id="printArea" class="hidden">
+    <h2 style="font-size:22px;margin-bottom:12px;" class="text-center">DARAZ-DIGIBOX Receipt</h2>
+    <div id="printList" style="font-family:monospace; white-space:pre-wrap;" class="text-center"></div>
+  </div>
+
+  <audio id="doorOpenSound" src="./audio/door_open.mp3" preload="auto"></audio>
+  <audio id="doorCloseSound" src="./audio/door_close.mp3" preload="auto"></audio>
+
+  <script src="config.js"></script>
+
+  <script>
+/* ==================== ORIENTATION (cleaned) ==================== */
+function checkOrientation() {
+  const forcePortrait = true; // কিয়স্ক হলে true রাখুন
+  if (forcePortrait) {
+    document.body.style.transform = "rotate(0deg)";
+  } else {
+    document.body.style.transform = (window.innerWidth > window.innerHeight) ? "rotate(90deg)" : "rotate(0deg)";
+  }
+}
+window.addEventListener("resize", checkOrientation);
+window.addEventListener("orientationchange", checkOrientation);
+checkOrientation();
+
+/* ==================== CONFIG (from config.js) ==================== */
+const API_URL       = window.APP_CONFIG.API_URL;
+const API_HEADERS   = window.APP_CONFIG.API_HEADERS;
+const DOOR_API_URL  = window.APP_CONFIG.DOOR_API_URL;
+const STATUS_API_URL= window.APP_CONFIG.STATUS_API_URL;
+const DEVICE_HEADERS= window.APP_CONFIG.DEVICE_HEADERS;
+const RIDER_VERIFY_URL  = window.APP_CONFIG.RIDER_VERIFY_URL;
+const RIDER_CONFIRM_URL = window.APP_CONFIG.RIDER_CONFIRM_URL;
+const RIDER_HEADERS     = window.APP_CONFIG.RIDER_HEADERS;
+
+/* ==================== STATE ==================== */
+let parcels = [];                 // [{parcel, otp}]
+let currentScanParcel = null;
+let lastSubmitted = [];
+let alertTimerId = null, alertProgressId = null;
+
+let doorCountdownTimer = null;
+let statusPollTimer = null;
+let doorCountdownTotal = 60 * 1000;
+
+/* ---------- Sounds ---------- */
+function playDoorSound(type) {
+  try {
+    if (type === "open") document.getElementById("doorOpenSound").play().catch(()=>{});
+    else if (type === "close") document.getElementById("doorCloseSound").play().catch(()=>{});
+  } catch(e) { console.warn("Sound error:", e); }
+}
+
+/* ---------- Modal-focus guard ---------- */
+function anyModalOpen() {
+  const ids = [
+    'otpModal','statusModal','riderConfirmModal','receiptChoiceModal',
+    'wrongParcelModal','deleteConfirmationModal','alertModal','confirmModal'
+  ];
+  return ids.some(id => document.getElementById(id)?.classList.contains('flex'));
+}
+function focusBarcode() {
+  if (!anyModalOpen()) document.getElementById("barcodeInput")?.focus();
+}
+setInterval(focusBarcode, 800);
+
+/* ---------- OTP modal close (top-center icon) ---------- */
+document.getElementById('closeBtn')?.addEventListener('click', () => { closeModal(); });
+
+/* ---------- Simple Alert ---------- */
+function showAlert({ type = "info", title = "", message = "", autoCloseMs = 3000 } = {}) {
+  const modal = document.getElementById("alertModal");
+  const card  = document.getElementById("alertCard");
+  const icon  = document.getElementById("alertIcon");
+  const head  = document.getElementById("alertTitle");
+  const text  = document.getElementById("alertMessage");
+  const bar   = document.getElementById("alertProgress");
+
+  const theme = {
+    success: { border:"border-green-500", title:"text-green-700", msg:"text-green-700", bar:"bg-green-500", icon:"text-green-600", defaultTitle:"Success" },
+    error:   { border:"border-red-500",   title:"text-red-700",   msg:"text-red-700",   bar:"bg-red-500",   icon:"text-red-600",   defaultTitle:"Error" },
+    info:    { border:"border-blue-500",  title:"text-blue-700",  msg:"text-blue-700",  bar:"bg-blue-500",  icon:"text-blue-600",  defaultTitle:"Notice" }
+  }[type] || { border:"border-gray-300", title:"text-gray-700", msg:"text-gray-700", bar:"bg-gray-400", icon:"text-gray-600", defaultTitle:"Notice" };
+
+  card.className = "relative w-[92%] max-w-lg rounded-2xl shadow-2xl p-6 bg-white animate-pop border " + theme.border;
+  head.className = "text-base font-semibold " + theme.title;
+  text.className = "text-xl font-bold " + theme.msg;
+  bar.className  = "h-1.5 rounded-b-2xl " + theme.bar;
+
+  const icons = {
+    success:`<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 ${theme.icon}" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`,
+    error:  `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 ${theme.icon}" viewBox="0 0 24 24" fill="currentColor"><path d="M11 15h2v2h-2v-2Zm0-8h2v6h-2V7Z"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Z"/></svg>`,
+    info:   `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 ${theme.icon}" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17h2v-6h-2v6Zm0-8h2V7h-2v2Z"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Z"/></svg>`
+  };
+  icon.innerHTML = icons[type];
+
+  head.textContent = title || theme.defaultTitle;
+  text.textContent = message || (type === "success" ? "Success" : type === "error" ? "Error" : "Notice");
+
+  modal.classList.remove("hidden"); modal.classList.add("flex");
+
+  if (alertTimerId) clearTimeout(alertTimerId);
+  if (alertProgressId) cancelAnimationFrame(alertProgressId);
+
+  const start = performance.now();
+  const total = Math.max(800, autoCloseMs || 3000);
+  function step(now) {
+    const elapsed = now - start;
+    const remain = Math.max(0, total - elapsed);
+    bar.style.width = (100 * (remain / total)) + "%";
+    if (remain > 0) alertProgressId = requestAnimationFrame(step);
+  }
+  bar.style.width = "100%";
+  alertProgressId = requestAnimationFrame(step);
+  alertTimerId = setTimeout(() => closeAlert(), total);
+}
+function closeAlert() {
+  const modal = document.getElementById("alertModal");
+  modal.classList.add("hidden"); modal.classList.remove("flex");
+  if (alertTimerId) clearTimeout(alertTimerId), alertTimerId = null;
+  if (alertProgressId) cancelAnimationFrame(alertProgressId), alertProgressId = null;
+}
+
+/* ---------- Confirm Modal ---------- */
+function showConfirm({ title = "Confirm", message = "Are you sure?" } = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("confirmModal");
+    const titleEl = document.getElementById("confirmTitle");
+    const msgEl = document.getElementById("confirmMessage");
+    const iconEl = document.getElementById("confirmIcon");
+    const yesBtn = document.getElementById("confirmYes");
+    const noBtn  = document.getElementById("confirmNo");
+
+    iconEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-blue-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2Zm1 15h-2v-6h2v6Zm0-8h-2V7h2v2Z"/></svg>`;
+    titleEl.textContent = title;
+    msgEl.textContent   = message;
+
+    function cleanup(val){ yesBtn.onclick = noBtn.onclick = null; modal.classList.add("hidden"); modal.classList.remove("flex"); resolve(val); }
+    yesBtn.onclick = () => cleanup(true);
+    noBtn.onclick  = () => cleanup(false);
+
+    modal.classList.remove("hidden"); modal.classList.add("flex");
+  });
+}
+
+/* ---------- OTP Validation (simplified) ---------- */
+function validateOTP(otp) {
+  return /^\d{6}$/.test(otp)
+    ? { isValid: true,  message: 'Valid OTP' }
+    : { isValid: false, message: 'OTP must be exactly 6 digits' };
+}
+
+/* ---------- Barcode Handling ---------- */
+const BARCODE_RE = /^DEX-[A-Z]{3}-\d{10}$/;
+const RIDER_RE   = /^exit_\d{6}$/;
+
+document.getElementById("barcodeInput").addEventListener("keydown", function (e) {
+  if (e.key !== "Enter") return;
+  if (document.getElementById("otpModal").classList.contains("flex")) return;
+
+  let code = e.target.value.trim();
+  if (!code) return;
+
+  if (RIDER_RE.test(code)) {
+    handleRiderScan(code);
+    e.target.value = "";
+    return;
+  }
+
+  if (!BARCODE_RE.test(code)) { showAlert({type:"error", title:"Error", message:"Invalid Parcel format!"}); e.target.value=""; return; }
+  if (code.length !== 18)     { showAlert({type:"error", title:"Error", message:"Invalid Parcel: must be 18 characters!"}); e.target.value=""; return; }
+  if (parcels.some(p => p.parcel === code)) { showAlert({type:"error", title:"Error", message:"Invalid Parcel: duplicate!"}); e.target.value=""; return; }
+
+  openOtpModalFor(code);
+  e.target.value = "";
+});
+
+/* ---------- OTP Modal Open/Close ---------- */
+function openOtpModalFor(parcelCode, prefillOtp = "") {
+  currentScanParcel = parcelCode;
+  document.getElementById("otpParcelLabel").textContent = parcelCode;
+  document.getElementById("otpInput").value = prefillOtp;
+  document.getElementById("otpMessage").innerText = "";
+  const modal = document.getElementById("otpModal");
+  modal.classList.remove("hidden"); modal.classList.add("flex");
+  document.getElementById("otpInput").focus();
+  buildKeypad();
+}
+function closeModal() {
+  const modal = document.getElementById("otpModal");
+  modal.classList.add("hidden"); modal.classList.remove("flex");
+  currentScanParcel = null;
+}
+document.addEventListener("keydown", (e) => {
+  const open = document.getElementById("otpModal").classList.contains("flex");
+  if (!open) return;
+  if (e.key === "Escape") closeModal();
+  if (e.key === "Enter")  submitOtp();
+});
+
+/* ---------- OTP Helpers ---------- */
+function clearOtpInput(){ const i=document.getElementById("otpInput"); i.value=""; i.focus(); }
+function appendOtpDigit(d){ const i=document.getElementById("otpInput"); if (i.value.length<6) i.value+=d; }
+function backspaceOtp(){ const i=document.getElementById("otpInput"); i.value=i.value.slice(0,-1); i.focus(); }
+function buildKeypad() {
+  const grid = document.querySelector("#otpModal .grid"); grid.innerHTML = "";
+  ["1","2","3","4","5","6","7","8","9","⌫","0","CLR"].forEach(k=>{
+    const btn=document.createElement("button"); btn.type="button";
+    btn.className="py-3 rounded-xl border text-lg font-semibold hover:bg-gray-50 active:scale-[.98]";
+    btn.textContent=k;
+    btn.onclick=()=>{ if(k==="⌫") backspaceOtp(); else if(k==="CLR") clearOtpInput(); else appendOtpDigit(k); };
+    grid.appendChild(btn);
+  });
+}
+
+/* ---------- OTP Submit ---------- */
+function submitOtp() {
+  const input = document.getElementById("otpInput");
+  let otp = (input.value || "").trim();
+  const validation = validateOTP(otp);
+  if (!validation.isValid) { document.getElementById("otpMessage").innerText = validation.message; input.value=""; input.focus(); return; }
+
+  const idx = parcels.findIndex(p => p.parcel === currentScanParcel);
+  if (idx >= 0) {
+    const dupOtp = parcels.some((p,i) => i!==idx && p.otp === otp);
+    if (dupOtp) { document.getElementById("otpMessage").innerText = "This OTP is already used for another parcel"; showAlert({ type:"error", title:"Error", message:"Duplicate OTP is not allowed" }); input.value=""; input.focus(); return; }
+    parcels[idx].otp = otp;
+  } else {
+    if (parcels.some(p => p.otp === otp)) { document.getElementById("otpMessage").innerText = "This OTP is already used for another parcel"; showAlert({ type:"error", title:"Error", message:"Duplicate OTP is not allowed" }); input.value=""; input.focus(); return; }
+    parcels.push({ parcel: currentScanParcel, otp });
+  }
+
+  renderTable(); closeModal(); showAlert({ type:"success", title:"Success", message:"OTP added successfully!" });
+}
+
+/* ---------- Render Table ---------- */
+function renderTable() {
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  parcels.forEach(p => {
+    const tr = document.createElement("tr");
+
+    const td1 = document.createElement("td");
+    td1.className = "p-3";
+    td1.textContent = p.parcel;
+
+    const td2 = document.createElement("td");
+    td2.className = "p-3";
+
+    const wrap = document.createElement("div");
+    wrap.className = "flex items-center gap-2";
+
+    const otpSpan = document.createElement("span");
+    otpSpan.textContent = p.otp;
+    otpSpan.className = "inline-flex items-center justify-center px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-800 font-mono text-sm shadow-inner cursor-pointer select-none";
+    otpSpan.onclick = async () => {
+      const ok = await showConfirm({ title:"Confirm", message:"Are you sure OTP change?" });
+      if (!ok) return;
+      openOtpModalFor(p.parcel, p.otp);
+    };
+    wrap.appendChild(otpSpan);
+
+    const del = document.createElement("button");
+    del.className = "text-red-500 hover:text-red-700 ml-3 icon-btn";
+    del.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor"><path d="M6 7h12v2H6V7Zm2 3h8v9a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-9Zm3-6h2a2 2 0 0 1 2 2v1H9V6a2 2 0 0 1 2-2Z"/></svg>`;
+    del.onclick = () => {
+      const modal = document.getElementById("deleteConfirmationModal");
+      const cancelBtn = document.getElementById("cancelDeleteBtn");
+      const confirmBtn= document.getElementById("confirmDeleteBtn");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      cancelBtn.onclick  = () => { modal.classList.add("hidden"); modal.classList.remove("flex"); };
+      confirmBtn.onclick = () => {
+        parcels = parcels.filter(x => x.parcel !== p.parcel);
+        renderTable();
+        modal.classList.add("hidden"); modal.classList.remove("flex");
+        if (parcels.length === 0) {
+          document.getElementById("parcelTable").classList.add("hidden");
+          document.getElementById("watermark").classList.remove("hidden");
+          document.getElementById("confirmAllBtn").classList.add("hidden");
+        }
+        showAlert({ type:"success", title:"Success", message:"Item deleted successfully!" });
+      };
+    };
+    wrap.appendChild(del);
+
+    td2.appendChild(wrap);
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    tbody.appendChild(tr);
+  });
+
+  const parcelTable = document.getElementById("parcelTable");
+  if (parcels.length > 0) {
+    parcelTable.classList.remove("hidden");
+    document.getElementById("watermark").classList.add("hidden");
+    document.getElementById("confirmAllBtn").classList.remove("hidden");
+  } else {
+    document.getElementById("confirmAllBtn").classList.add("hidden");
+  }
+}
+
+/* ---------- Submit flow ---------- */
+async function confirmSubmit() {
+  if (!parcels.length) { showAlert({type:"error", title:"Error", message:"No parcel added yet"}); return; }
+  const ok = await showConfirm({ title:"Confirm", message:"Are you sure submit?" });
+  if (!ok) return;
+  finalConfirm();
+}
+
+/* ---------- Status Modal helpers (info state + okBtn null-safe) ---------- */
+function openStatusModal({ state='loading', title='Processing...', message='Exit door Open' } = {}, showBTN = true) {
+  const modal = document.getElementById('statusModal');
+  const iconWrap = document.getElementById('statusIconWrap');
+  const titleEl = document.getElementById('statusTitle');
+  const msgEl   = document.getElementById('statusMessage');
+  const footer  = document.getElementById('statusFooter');
+  const okBtn   = document.getElementById('statusOkBtn');
+
+  iconWrap.className = 'mx-auto mb-4 flex items-center justify-center w-20 h-20 rounded-full border-4';
+  footer.classList.add('hidden');
+
+  if (okBtn) {
+    okBtn.style.display = showBTN ? '' : 'none';
+    okBtn.onclick = () => closeStatusModal();
+  }
+
+  if (state === 'loading') {
+    iconWrap.classList.add('border-blue-300');
+    iconWrap.innerHTML = `<div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full spin"></div>`;
+  } else if (state === 'success') {
+    iconWrap.classList.add('border-green-200', 'bg-green-50');
+    iconWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`;
+  } else if (state === 'error') {
+    iconWrap.classList.add('border-red-200', 'bg-red-50');
+    iconWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3 1.4 1.4Z"/></svg>`;
+  } else if (state === 'locked') {
+    iconWrap.classList.add('border-gray-300', 'bg-gray-50');
+    iconWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-gray-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm3 8H9V6a3 3 0 1 1 6 0v3Z"/></svg>`;
+  } else { // info/default
+    iconWrap.classList.add('border-blue-200','bg-blue-50');
+    iconWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-blue-600" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17h2v-6h-2v6Zm0-8h2V7h-2v2Z"/><path d="M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2Z"/></svg>`;
+  }
+
+  titleEl.textContent = title;
+  msgEl.textContent   = message;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+function updateStatusModal({ state, title, message='', showFooter = false }) {
+  openStatusModal({ state, title, message });
+  const footer = document.getElementById('statusFooter');
+  if (showFooter) footer.classList.remove('hidden');
+}
+function closeStatusModal() {
+  const modal = document.getElementById('statusModal');
+  modal.classList.add('hidden'); modal.classList.remove('flex');
+  stopDoorCountdown(); stopStatusPolling();
+}
+
+/* ---------- Rider fail auto-close ---------- */
+let riderFailTimer = null, riderFailRAF = null;
+function startRiderFailAutoClose(ms = 3000) {
+  const wrap = document.getElementById('riderFailFooter');
+  const bar  = document.getElementById('riderFailProgress');
+  wrap.classList.remove('hidden'); bar.style.width = '0%';
+  const start = performance.now();
+  function step(now){ const pct = Math.min(100, ((now-start)/ms)*100); bar.style.width = pct + '%'; if (pct<100) riderFailRAF = requestAnimationFrame(step); }
+  riderFailRAF = requestAnimationFrame(step);
+  riderFailTimer = setTimeout(()=>{ stopRiderFailAutoClose(); const m=document.getElementById('riderConfirmModal'); m.classList.add('hidden'); m.classList.remove('flex'); }, ms);
+}
+function stopRiderFailAutoClose() {
+  const wrap = document.getElementById('riderFailFooter');
+  const bar  = document.getElementById('riderFailProgress');
+  if (riderFailTimer) clearTimeout(riderFailTimer), riderFailTimer=null;
+  if (riderFailRAF) cancelAnimationFrame(riderFailRAF), riderFailRAF=null;
+  if (wrap) wrap.classList.add('hidden'); if (bar) bar.style.width='0%';
+}
+
+/* ---------- Rider Verify Flow (headers merged) ---------- */
+async function handleRiderScan(code) {
+  const m = document.getElementById('riderConfirmModal');
+  const icon = document.getElementById('riderIconWrap');
+  const header = document.getElementById('riderHeader');
+  const sub = document.getElementById('riderSub');
+  const q = document.getElementById('riderQuestion');
+  const yesBtn = document.getElementById('riderYesBtn');
+  const noBtn  = document.getElementById('riderNoBtn');
+
+  stopRiderFailAutoClose();
+  icon.className = 'mx-auto mb-3 flex items-center justify-center w-20 h-20 rounded-full border-4 border-blue-200 bg-blue-50';
+  icon.innerHTML = `<div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full spin"></div>`;
+  header.textContent = 'Verifying Rider…'; sub.textContent = 'Please wait'; q.classList.add('hidden');
+  m.classList.remove('hidden'); m.classList.add('flex');
+
+  const last6 = code.replace(/\D/g, '').slice(-6);
+  try {
+    const headers = { 'Content-Type': 'application/json', ...(RIDER_HEADERS || {}) };
+    const res = await fetch(RIDER_VERIFY_URL, { method: 'POST', headers, body: JSON.stringify({ access_code: last6 }) });
+    const ct = res.headers.get('content-type') || '';
+    const payload = ct.includes('application/json') ? await res.json().catch(()=>({})) : await res.text();
+
+    if (!res.ok) {
+      icon.className = 'mx-auto mb-3 flex items-center justify-center w-20 h-20 rounded-full border-4 border-red-200 bg-red-50';
+      icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3 1.4 1.4Z"/></svg>`;
+      header.textContent = 'Rider Verification Failed';
+      const msg = typeof payload === 'string' ? payload : (payload?.message || `HTTP ${res.status}`);
+      sub.textContent = msg || 'Invalid access code';
+      startRiderFailAutoClose(3000);
+      return;
+    }
+
+    icon.className = 'mx-auto mb-3 flex items-center justify-center w-20 h-20 rounded-full border-4 border-green-200 bg-green-50';
+    icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`;
+    header.textContent = 'Rider Verification Successful';
+    sub.textContent = 'Thank you for using Digibox';
+    q.classList.remove('hidden');
+
+    yesBtn.onclick = async () => { stopRiderFailAutoClose(); m.classList.add('hidden'); m.classList.remove('flex'); await proceedDoorFlow(true, payload?.data); resetUI(); };
+    noBtn.onclick  = ()   => { stopRiderFailAutoClose(); m.classList.add('hidden'); m.classList.remove('flex'); document.getElementById('barcodeInput').focus(); };
+
+  } catch (err) {
+    icon.className = 'mx-auto mb-3 flex items-center justify-center w-20 h-20 rounded-full border-4 border-red-200 bg-red-50';
+    icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3 1.4 1.4Z"/></svg>`;
+    document.getElementById('riderHeader').textContent = 'Network Error';
+    document.getElementById('riderSub').textContent = err.message || 'Please try again';
+    startRiderFailAutoClose(3000);
+  }
+}
+
+/* ---------- Door unlock with stepped retry (1s,2s,3s,4s) ---------- */
+async function unlockDoor(xPoint = "exit", xCmd = "unlock") {
+  const maxAttempts = 5;  // total attempts
+  let attempt = 0;
+  let lastError = "Door API request failed";
+
+  while (attempt < maxAttempts) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+    try {
+      const headers = { 'Content-Type': 'application/json', ...(DEVICE_HEADERS || {}) };
+      const res = await fetch(DOOR_API_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ "X-Point": xPoint, "X-Cmd": xCmd }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      const ct = res.headers.get("content-type") || "";
+      const payload = ct.includes("application/json") ? await res.json().catch(() => ({})) : await res.text();
+
+      if (res.ok) {
+        return { ok: true, message: "Door unlocked" };
+      } else {
+        lastError = (typeof payload === "string" && payload) || (payload && payload.message) || `HTTP ${res.status}`;
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = (err?.name === "AbortError") ? "Door API timeout" : (err?.message || "Door API error");
+    }
+
+    attempt++;
+    if (attempt < maxAttempts) {
+      const delaySec = attempt; // 1,2,3,4
+      await new Promise(r => setTimeout(r, delaySec * 1000));
+    }
+  }
+
+  return { ok: false, message: lastError };
+}
+
+/* ---------- STATUS polling ---------- */
+async function fetchDoorStatus() {
+  try {
+    const headers = { 'Content-Type': 'application/json', ...(DEVICE_HEADERS || {}) };
+    const res = await fetch(STATUS_API_URL, { method: "POST", headers });
+    const ct = res.headers.get("content-type") || "";
+    const payload = ct.includes("application/json") ? await res.json().catch(() => ({})) : await res.text();
+    if (typeof payload === "string") return {};
+    return payload || {};
+  } catch (_) { return {}; }
+}
+function startStatusPolling() {
+  stopStatusPolling();
+  statusPollTimer = setInterval(async () => {
+    const st = await fetchDoorStatus();
+    if (st && st.exit_status && String(st.exit_status).toLowerCase() === "locked") {
+      updateStatusModal({ state:'locked', title:'Door Locked', message:'Exit Door Lock', showFooter:false });
+      setTimeout(() => { closeStatusModal(); }, 1500);
+    }
+  }, 2000);
+}
+function stopStatusPolling() { if (statusPollTimer) { clearInterval(statusPollTimer); statusPollTimer = null; } }
+
+/* ---------- Receipt helpers ---------- */
+function openReceiptChoiceModal() {
+  const m = document.getElementById('receiptChoiceModal');
+  const msg = document.getElementById('receiptPrintMsg');
+  msg.classList.add('hidden');
+  m.classList.remove('hidden'); m.classList.add('flex');
+}
+function closeReceiptChoiceModal() {
+  const m = document.getElementById('receiptChoiceModal');
+  m.classList.add('hidden'); m.classList.remove('flex');
+}
+function buildPrintContent(list) {
+  const holder = document.getElementById("printList");
+  holder.textContent = list.map(p => {
+    const parcel = p.parcel ?? p.parcel_number ?? p.id ?? '';
+    const otp    = p.daraz_otp ?? p.otp ?? p.code ?? '';
+    return `${parcel}  |  OTP: ${otp}`;
+  }).join("\n");
+}
+function doPrintNow() {
+  const area = document.getElementById("printArea");
+  area.classList.remove("hidden"); window.print(); area.classList.add("hidden");
+}
+
+/* ---------- Shared door flow ---------- */
+async function proceedDoorFlow(isRider = false, data = {}) {
+  openStatusModal({ state:'loading', title:'Verification Success', message:'Exit door Open' }, false);
+
+  const door = await unlockDoor("exit", "unlock");
+  if (door.ok) {
+    playDoorSound("open");
+    if (isRider === true) {
+      try {
+        const headers = { 'Content-Type': 'application/json', ...(RIDER_HEADERS || {}) };
+        await fetch(RIDER_CONFIRM_URL, { method:'POST', headers, body: JSON.stringify(data) });
+      } catch(_){}
+    }
+    updateStatusModal({ state:'success', title:'Door Unlocked', message:'Your door exit point unlock', showFooter:true });
+    startDoorCountdown(60, () => { closeStatusModal(); });
+    startStatusPolling();
+  } else {
+    updateStatusModal({
+      state: 'error',
+      title: 'Please Contact: +8809638556677',
+      message: "We apologize for the temporary inconvenience. Due to technical issues, the door was not unlocked.",
+      showFooter: false
+    });
+    const t = document.getElementById('statusTitle');
+    if (t) t.classList.add('text-2xl','md:text-3xl','font-extrabold','text-red-700');
+    // Error কেসে ইচ্ছাকৃতভাবে অটো-ক্লোজ নেই
+  }
+}
+
+/* ---------- WRONG PARCEL helpers ---------- */
+let wrongParcelRemoveIds = [];
+function openWrongParcelModal(errorCode = "WRONG_PARCEL", details) {
+  const m = document.getElementById('wrongParcelModal');
+  const head = document.getElementById('wrongParcelHeader');
+  const body = document.getElementById('wrongParcelBody');
+  head.textContent = errorCode || 'WRONG_PARCEL';
+  body.innerHTML = '';
+
+  let rows = [];
+  if (Array.isArray(details?.wrong)) rows = details.wrong;
+  else if (details?.wrong && typeof details.wrong === 'object') rows = [details.wrong];
+
+  wrongParcelRemoveIds = rows.map(d => String(d.parcel_no ?? d.parcel ?? d.parcel_number ?? '').trim()).filter(Boolean);
+
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="3" class="px-4 py-3 text-center text-sm text-gray-600">No detail payload received.</td>`;
+    body.appendChild(tr);
+  } else {
+    rows.forEach((d) => {
+      const parcel_no = d.parcel_no ?? d.parcel ?? d.parcel_number ?? '';
+      const box_no    = d.box_no ?? d.box ?? '';
+      const shelf     = d.shelf ?? d.shelf_no ?? d.shelf_id ?? '';
+      const tr = document.createElement('tr');
+      tr.className = "bg-red-50/40 hover:bg-red-50 transition";
+      tr.innerHTML = `
+        <td class="px-4 py-3 font-mono text-sm font-semibold text-gray-800"><span class="px-2 py-1 rounded bg-white border border-red-200">${parcel_no}</span></td>
+        <td class="px-4 py-3 font-mono text-sm"><span class="px-2 py-1 rounded bg-white border border-red-200">${box_no}</span></td>
+        <td class="px-4 py-3 font-mono text-sm"><span class="px-2 py-1 rounded bg-white border border-red-200">${shelf}</span></td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+
+  m.classList.remove('hidden'); m.classList.add('flex');
+}
+function closeWrongParcelModal() {
+  const m = document.getElementById('wrongParcelModal');
+  m.classList.add('hidden'); m.classList.remove('flex');
+
+  if (wrongParcelRemoveIds.length) {
+    parcels = parcels.filter(p => !wrongParcelRemoveIds.includes(String(p.parcel).trim()));
+    renderTable();
+  }
+  wrongParcelRemoveIds = [];
+  document.getElementById('barcodeInput').focus();
+}
+
+/* ---------- Final Submit (merge JSON header) ---------- */
+async function finalConfirm() {
+  const confirmBtn = document.getElementById("confirmAllBtn");
+  const origText = confirmBtn.innerText;
+  confirmBtn.disabled = true; confirmBtn.innerText = "Submitting...";
+
+  try {
+    const payload = { parcel_numbers: parcels.map(p => ({ parcel: p.parcel, daraz_otp: p.otp })) };
+    const headers = { 'Content-Type': 'application/json', ...(API_HEADERS || {}) };
+    const res = await fetch(API_URL, { method:"POST", headers, body: JSON.stringify(payload) });
+    const ct = res.headers.get("content-type") || "";
+    let data = null;
+    try { data = ct.includes("application/json") ? await res.json() : await res.text(); } catch(_) { data = null; }
+
+    if (!res.ok) {
+      if (data && typeof data === 'object' && (data.error_code === 'WRONG_PARCEL' || data?.error?.code === 'WRONG_PARCEL')) {
+        openWrongParcelModal('WRONG_PARCEL', data.details || data?.error?.details || []);
+        return;
+      }
+      const errMsg = (data && typeof data === 'object' && (data.message || data.error_code)) || (typeof data === 'string' ? data : `HTTP ${res.status}`);
+      openStatusModal({ state:'error', title:'Submit Failed', message: errMsg || 'Submission failed' });
+      return;
+    }
+
+    if (data && typeof data === 'object') {
+      if (data.error_code === 'WRONG_PARCEL' || data?.error?.code === 'WRONG_PARCEL') {
+        openWrongParcelModal('WRONG_PARCEL', data.details || data?.error?.details || []);
+        return;
+      }
+
+      if (Number(data.status) === 200) {
+        await proceedDoorFlow(false);
+        resetUI();
+      } else {
+        openStatusModal({ state:'error', title:'Verification Failed', message: data.message || data.error_code || 'Verification not successful.' });
+      }
+    } else {
+      openStatusModal({ state:'info', title:'Submitted', message:'Request completed.' });
+    }
+
+  } catch (err) {
+    openStatusModal({ state:'error', title:'Network Error', message: err.message || 'Network error' });
+  } finally {
+    confirmBtn.disabled = false; confirmBtn.innerText = origText;
+    // Error কেসে modal ইচ্ছাকৃতভাবে খোলা থাকবে (অটো-ক্লোজ নেই)
+  }
+}
+
+/* ---------- Door success countdown (synced + decoupled) ---------- */
+function startDoorCountdown(sec = 60, onDone) {
+  const label = document.getElementById('doorCountdown');
+  const bar   = document.getElementById('statusProgress');
+  let t = sec; if (label) label.textContent = `${t}s`;
+
+  stopDoorCountdown();
+  doorCountdownTotal = sec * 1000;
+
+  const start = performance.now();
+  function tick(now) {
+    const elapsed = now - start;
+    const pct = Math.min(100, (elapsed / doorCountdownTotal) * 100);
+    if (bar) bar.style.width = pct + "%";
+    if (pct < 100) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  doorCountdownTimer = setInterval(() => {
+    t -= 1; if (label) label.textContent = `${t}s`;
+    if (t <= 0) { stopDoorCountdown(); if (typeof onDone === 'function') onDone(); }
+  }, 1000);
+}
+function stopDoorCountdown() { if (doorCountdownTimer) { clearInterval(doorCountdownTimer); doorCountdownTimer = null; } }
+
+/* ---------- Reset UI ---------- */
+function resetUI() {
+  parcels = []; currentScanParcel = null;
+  document.getElementById("tableBody").innerHTML = "";
+  document.getElementById("parcelTable").classList.add("hidden");
+  document.getElementById("watermark").classList.remove("hidden");
+  document.getElementById("confirmAllBtn").classList.add("hidden");
+  const barcode = document.getElementById("barcodeInput"); barcode.value = ""; barcode.focus();
+}
+  </script>
+
+  <!-- Inline Alert + Confirm Modals -->
+  <div id="alertModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[70]">
+    <div id="alertCard" class="relative w-[92%] max-w-lg rounded-2xl shadow-2xl p-6 bg-white animate-pop border">
+      <button id="alertClose"
+        class="absolute top-3 right-3 inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-black/5"
+        aria-label="Close"
+        onclick="closeAlert()">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29 10.59 10.6l6.3-6.31z"/>
+        </svg>
+      </button>
+      <div class="flex items-start gap-3">
+        <div id="alertIcon" class="shrink-0"></div>
+        <div class="grow">
+          <h3 id="alertTitle" class="text-base font-semibold text-gray-700 mb-1">Notice</h3>
+          <div id="alertMessage" class="text-xl font-bold">Message</div>
+        </div>
+      </div>
+      <div class="absolute left-0 right-0 bottom-0">
+        <div id="alertProgress" class="h-1.5 rounded-b-2xl"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[62]">
+    <div id="confirmCard" class="w-[92%] max-w-md bg-white rounded-2xl shadow-2xl p-5 animate-pop">
+      <div class="flex items-start gap-3">
+        <div id="confirmIcon"></div>
+        <div class="grow">
+          <h3 id="confirmTitle" class="text-lg font-semibold text-gray-800">Confirm</h3>
+          <p id="confirmMessage" class="text-sm text-gray-600 mt-1"></p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-5">
+        <button id="confirmNo" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3 1.4 1.4Z"/></svg>
+          Cancel
+        </button>
+        <button id="confirmYes" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+          Yes
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
